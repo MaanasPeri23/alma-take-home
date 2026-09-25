@@ -44,3 +44,15 @@ Every commit also carries an `Agent:` trailer (`claude-code`, `mixed`, or `hand-
 - Why it was wrong: `postgresql_ops` is for operator classes, not sort order. The database got the right index, but the model and migration disagreed, so every future autogenerate would drop and recreate it. All tests still passed.
 - Caught by: reviewer subagent (ran `alembic check`)
 - Fix: `Index(..., Lead.created_at.desc(), Lead.id.desc())`, regenerated migration, and `alembic check` added to `make test` so CI catches model/migration drift.
+
+### Lead form had no `method`, so a pre-hydration submit would put PII in the URL
+- What the agent produced: `<form onSubmit={...}>` in `frontend/app/lead-form.tsx`, relying on `preventDefault` for every submit.
+- Why it was wrong: before React hydrates (slow or failed JS), the browser does a native submit, which defaults to `GET` and sends name and email in the query string, where they land in browser history and access logs.
+- Caught by: reviewer subagent
+- Fix: `method="post" encType="multipart/form-data"` on the form, in the W1 commit.
+
+### File-picker button was unreadable in dark mode
+- What the agent produced: `file:bg-zinc-100` on the resume input with no text color, so the "Choose file" label inherited the page foreground.
+- Why it was wrong: in dark mode `globals.css` sets the foreground to near-white, so the button rendered as white text on a light-grey fill.
+- Caught by: manual test
+- Fix: explicit `file:text-zinc-900` (and `file:bg-zinc-200`), in the W1 commit.
