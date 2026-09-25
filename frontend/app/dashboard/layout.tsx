@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import AccountMenu from "./account-menu";
 
 export default function DashboardLayout({ children }: LayoutProps<"/dashboard">) {
@@ -5,7 +7,9 @@ export default function DashboardLayout({ children }: LayoutProps<"/dashboard">)
     <div className="flex min-h-full flex-col">
       <header className="border-b border-zinc-200 px-4 py-3">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
-          <span className="font-semibold">Leads</span>
+          <Link href="/dashboard" className="font-semibold">
+            Leads
+          </Link>
           <AccountMenu />
         </div>
       </header>

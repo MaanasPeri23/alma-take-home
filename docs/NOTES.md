@@ -74,3 +74,9 @@ Every commit also carries an `Agent:` trailer (`claude-code`, `mixed`, or `hand-
 - Why it was wrong: no attorney has that id, so the request got a 401 from the account lookup, whether or not the signature or expiry check worked. Removing either check would still have left the tests green. The same review found that a token without `exp` never expired, and that a password over 72 bytes crashed login with a 500 (bcrypt 5 raises).
 - Caught by: reviewer subagent
 - Fix: forged tokens are now built for a real attorney, and each test first proves the valid token works. Added other-secret, `alg: none` and no-`exp` cases, and made `exp`/`iat`/`sub` required. Checked by removing the `require` option: exactly the no-`exp` test failed. Passwords over 72 bytes are now a 401.
+
+### Dashboard had a dead end past the last page
+- What the agent produced: when a page had no rows but `total > 0` (a hand-edited `?offset=500`, or leads moving out of a filter while on its last page), the list showed "No leads on this page." and hid the Previous/Next controls.
+- Why it was wrong: the only way out was the filter links, which isn't obvious. It also happens in normal use: mark the last Pending lead on a page as reached out, go back, and the Pending view is empty.
+- Caught by: reviewer subagent
+- Fix: a "Back to first page" link in that state, in the W3 commit. The same review added a guard so a late re-fetch after a 409 can't overwrite a different lead.
