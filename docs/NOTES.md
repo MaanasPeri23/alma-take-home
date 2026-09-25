@@ -37,7 +37,7 @@ The catches I made myself are mostly about process and product rather than code:
 machine, what a reader of the repo would see, whether CI actually protected `main`, and whether
 the test plan matched real usage.
 
-Every catch below traces back to something I set up or asked for. The last column says which.
+Every catch below (both lanes) traces back to something I set up or asked for. The last column says which.
 
 | # | Catch | Caught by | Traces back to |
 | --- | --- | --- | --- |
@@ -52,6 +52,10 @@ Every catch below traces back to something I set up or asked for. The last colum
 | 9 | Resume download would fail mid-stream instead of 404 | My review loop | The reviewer running on every commit, with "missing rows are 404, never 500" from my rules |
 | 10 | NUL in a name caused a 500; the reviewer's own fix was wrong | My review loop, then a test | My checklist rule that every change carries a failure-case test; the test failed before the bad fix could land |
 | 11 | Security tests that couldn't fail | My review loop | My checklist line "new behavior has a test, including at least one failure case" |
+| 12 | File-picker button unreadable in dark mode | **Me**, during the W1 manual check | Checking the UI in a browser before approving |
+| 13 | Lead form without `method` could put PII in the URL before hydration | My review loop (frontend lane) | My checklist item on PII |
+| 14 | Dashboard dead end past the last page | My review loop (frontend lane) | The reviewer on every commit |
+| 15 | E2E test would time out on a clean stack | My review loop (frontend lane) | The reviewer on every commit |
 
 <!--
 ### [short title]
@@ -118,7 +122,7 @@ Every catch below traces back to something I set up or asked for. The last colum
 ### File-picker button was unreadable in dark mode
 - What the agent produced: `file:bg-zinc-100` on the resume input with no text color, so the "Choose file" label inherited the page foreground.
 - Why it was wrong: in dark mode `globals.css` sets the foreground to near-white, so the button rendered as white text on a light-grey fill.
-- Caught by: manual test
+- Caught by: me, during the W1 manual check ("I can't see the button, it's fully white")
 - Fix: explicit `file:text-zinc-900` (and `file:bg-zinc-200`), in the W1 commit.
 
 ### Resume download would have failed mid-stream instead of returning 404
