@@ -45,6 +45,18 @@ Every commit also carries an `Agent:` trailer (`claude-code`, `mixed`, or `hand-
 - Caught by: reviewer subagent (ran `alembic check`)
 - Fix: `Index(..., Lead.created_at.desc(), Lead.id.desc())`, regenerated migration, and `alembic check` added to `make test` so CI catches model/migration drift.
 
+### Lead form had no `method`, so a pre-hydration submit would put PII in the URL
+- What the agent produced: `<form onSubmit={...}>` in `frontend/app/lead-form.tsx`, relying on `preventDefault` for every submit.
+- Why it was wrong: before React hydrates (slow or failed JS), the browser does a native submit, which defaults to `GET` and sends name and email in the query string, where they land in browser history and access logs.
+- Caught by: reviewer subagent
+- Fix: `method="post" encType="multipart/form-data"` on the form, in the W1 commit.
+
+### File-picker button was unreadable in dark mode
+- What the agent produced: `file:bg-zinc-100` on the resume input with no text color, so the "Choose file" label inherited the page foreground.
+- Why it was wrong: in dark mode `globals.css` sets the foreground to near-white, so the button rendered as white text on a light-grey fill.
+- Caught by: manual test
+- Fix: explicit `file:text-zinc-900` (and `file:bg-zinc-200`), in the W1 commit.
+
 ### Resume download would have failed mid-stream instead of returning 404
 - What the agent produced: `S3Storage.open` written as a generator, so `get_object` only ran when the first chunk was read.
 - Why it was wrong: in B4 the download route streams the file. A missing object would have raised *after* the 200 headers were sent, giving the attorney a broken download instead of a clean 404. The round-trip test passed because it iterated inside `pytest.raises`.
@@ -62,3 +74,15 @@ Every commit also carries an `Agent:` trailer (`claude-code`, `mixed`, or `hand-
 - Why it was wrong: no attorney has that id, so the request got a 401 from the account lookup, whether or not the signature or expiry check worked. Removing either check would still have left the tests green. The same review found that a token without `exp` never expired, and that a password over 72 bytes crashed login with a 500 (bcrypt 5 raises).
 - Caught by: reviewer subagent
 - Fix: forged tokens are now built for a real attorney, and each test first proves the valid token works. Added other-secret, `alg: none` and no-`exp` cases, and made `exp`/`iat`/`sub` required. Checked by removing the `require` option: exactly the no-`exp` test failed. Passwords over 72 bytes are now a 401.
+
+### Dashboard had a dead end past the last page
+- What the agent produced: when a page had no rows but `total > 0` (a hand-edited `?offset=500`, or leads moving out of a filter while on its last page), the list showed "No leads on this page." and hid the Previous/Next controls.
+- Why it was wrong: the only way out was the filter links, which isn't obvious. It also happens in normal use: mark the last Pending lead on a page as reached out, go back, and the Pending view is empty.
+- Caught by: reviewer subagent
+- Fix: a "Back to first page" link in that state, in the W3 commit. The same review added a guard so a late re-fetch after a 409 can't overwrite a different lead.
+
+### E2E test would have timed out on a clean stack
+- What the agent produced: a Playwright config with the default timeouts (30 s per test, 5 s per `expect`), verified only against a warm dev server.
+- Why it was wrong: the `web` container runs `next dev`, which compiles each route on its first visit. The design's "Full E2E" check is `make e2e` from a clean stack, which is exactly the cold case, so the first navigation or the first-row check could exceed 5 s. The same review found that `make e2e` hardcoded the login instead of reading `SEED_ATTORNEY_*` from `.env`, and that the attorney-email check didn't look at the recipient.
+- Caught by: reviewer subagent
+- Fix: 90 s test / 15 s expect timeouts, credentials passed from `.env` by the Makefile, attorney email matched by `to:` and exact subject, in the W4 commit.

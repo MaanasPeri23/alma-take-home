@@ -1,4 +1,4 @@
-.PHONY: up down test test-fast lint migrate gen-client check-client smoke seed
+.PHONY: up down test test-fast lint migrate gen-client check-client smoke seed e2e
 
 UV := uv run --quiet --python 3.12 --extra dev
 
@@ -52,3 +52,11 @@ smoke:
 # Create (or reset) the attorney login from SEED_ATTORNEY_EMAIL / SEED_ATTORNEY_PASSWORD in .env.
 seed:
 	docker compose exec -T api python -m scripts.seed_attorneys
+
+# Browser happy path against the running stack (`make up`). Seeds first so the login exists, and
+# logs in with the same SEED_ATTORNEY_* values from .env.
+# Needs `npm ci && npx playwright install chromium` in frontend/ once. Watch it: `make e2e ARGS=--headed`.
+e2e: seed
+	cd frontend && E2E_EMAIL="$$(grep '^SEED_ATTORNEY_EMAIL=' ../.env | cut -d= -f2-)" \
+		E2E_PASSWORD="$$(grep '^SEED_ATTORNEY_PASSWORD=' ../.env | cut -d= -f2-)" \
+		npx playwright test $(ARGS)
