@@ -105,7 +105,7 @@ Each step is one commit. The note after each step is the check I do by hand befo
 - [x] F1: Agent rules, hooks, reviewer, design doc draft
 - [x] F2: Docker setup for all five services, Makefile, empty apps, the `/api` proxy, CI.
   Check: the web app, `/api/health`, Mailpit, and MinIO all load
-- [ ] F3: Database tables and migrations, API request/response shapes, route stubs, generated
+- [x] F3: Database tables and migrations, API request/response shapes, route stubs, generated
   client. Check: Swagger lists every route
 
 **Backend** (PR 2)
