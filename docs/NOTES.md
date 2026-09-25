@@ -80,3 +80,9 @@ Every commit also carries an `Agent:` trailer (`claude-code`, `mixed`, or `hand-
 - Why it was wrong: the only way out was the filter links, which isn't obvious. It also happens in normal use: mark the last Pending lead on a page as reached out, go back, and the Pending view is empty.
 - Caught by: reviewer subagent
 - Fix: a "Back to first page" link in that state, in the W3 commit. The same review added a guard so a late re-fetch after a 409 can't overwrite a different lead.
+
+### E2E test would have timed out on a clean stack
+- What the agent produced: a Playwright config with the default timeouts (30 s per test, 5 s per `expect`), verified only against a warm dev server.
+- Why it was wrong: the `web` container runs `next dev`, which compiles each route on its first visit. The design's "Full E2E" check is `make e2e` from a clean stack, which is exactly the cold case, so the first navigation or the first-row check could exceed 5 s. The same review found that `make e2e` hardcoded the login instead of reading `SEED_ATTORNEY_*` from `.env`, and that the attorney-email check didn't look at the recipient.
+- Caught by: reviewer subagent
+- Fix: 90 s test / 15 s expect timeouts, credentials passed from `.env` by the Makefile, attorney email matched by `to:` and exact subject, in the W4 commit.
