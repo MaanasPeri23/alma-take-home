@@ -1,5 +1,7 @@
+import re
 import uuid
 from typing import Annotated
+from urllib.parse import quote
 
 from fastapi import (
     APIRouter,
@@ -33,7 +35,21 @@ from app.storage.base import StorageBackend
 # browser to the internal api:8000 host, which it can't reach through the Next.js proxy.
 router = APIRouter(prefix="/api/leads", tags=["leads"])
 
-NOT_IMPLEMENTED = HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "Not implemented yet")
+LEAD_NOT_FOUND = HTTPException(status.HTTP_404_NOT_FOUND, "Lead not found")
+
+DB = Annotated[Session, Depends(get_db)]
+Storage = Annotated[StorageBackend, Depends(get_storage)]
+
+
+def content_disposition(filename: str) -> str:
+    """`attachment` with the original name. The ASCII fallback covers old clients; `filename*`
+    (RFC 5987) carries the exact name, including spaces and accents."""
+    # Uploads are already cleaned (B2), but strip control characters again: a CR/LF here would
+    # break the header, and a name could reach the database some other way.
+    filename = re.sub(r"[\x00-\x1f\x7f]", "", filename)
+    ascii_name = filename.encode("ascii", "ignore").decode().replace('"', "") or "resume"
+    return f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename)}"
+
 
 CurrentAttorney = Annotated[Attorney, Depends(get_current_attorney)]
 
@@ -83,12 +99,19 @@ def create_lead(
 @router.get("", response_model=LeadPage, responses=UNAUTHORIZED, operation_id="listLeads")
 def list_leads(
     _: CurrentAttorney,
+    db: DB,
     state: LeadState | None = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> LeadPage:
     """Newest first."""
-    raise NOT_IMPLEMENTED
+    items, total = lead_service.list_leads(db, state=state, limit=limit, offset=offset)
+    return LeadPage(
+        items=[LeadOut.model_validate(lead) for lead in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get(
@@ -97,8 +120,11 @@ def list_leads(
     responses={**UNAUTHORIZED, **NOT_FOUND},
     operation_id="getLead",
 )
-def get_lead(lead_id: uuid.UUID, _: CurrentAttorney) -> LeadDetail:
-    raise NOT_IMPLEMENTED
+def get_lead(lead_id: uuid.UUID, _: CurrentAttorney, db: DB) -> LeadDetail:
+    try:
+        return LeadDetail.model_validate(lead_service.get_lead(db, lead_id))
+    except lead_service.LeadNotFound as exc:
+        raise LEAD_NOT_FOUND from exc
 
 
 @router.get(
@@ -111,8 +137,24 @@ def get_lead(lead_id: uuid.UUID, _: CurrentAttorney) -> LeadDetail:
     },
     operation_id="downloadResume",
 )
-def download_resume(lead_id: uuid.UUID, _: CurrentAttorney) -> StreamingResponse:
-    raise NOT_IMPLEMENTED
+def download_resume(
+    lead_id: uuid.UUID, _: CurrentAttorney, db: DB, storage: Storage
+) -> StreamingResponse:
+    try:
+        lead, chunks = lead_service.open_resume(db, storage, lead_id)
+    except lead_service.LeadNotFound as exc:
+        raise LEAD_NOT_FOUND from exc
+    return StreamingResponse(
+        chunks,
+        media_type=lead.resume_content_type,
+        headers={
+            "Content-Disposition": content_disposition(lead.resume_filename),
+            "Content-Length": str(lead.resume_size_bytes),
+            # Resumes are personal data: never let the browser guess the type or cache it.
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "private, no-store",
+        },
+    )
 
 
 @router.patch(
@@ -122,7 +164,13 @@ def download_resume(lead_id: uuid.UUID, _: CurrentAttorney) -> StreamingResponse
     operation_id="updateLeadState",
 )
 def update_lead_state(
-    lead_id: uuid.UUID, body: LeadStateUpdate, attorney: CurrentAttorney
+    lead_id: uuid.UUID, body: LeadStateUpdate, attorney: CurrentAttorney, db: DB
 ) -> LeadDetail:
     """Moves the lead to `body.state` if the transition is allowed, and records who did it."""
-    raise NOT_IMPLEMENTED
+    try:
+        lead = lead_service.change_state(db, lead_id, body.state, attorney)
+    except lead_service.LeadNotFound as exc:
+        raise LEAD_NOT_FOUND from exc
+    except lead_service.TransitionNotAllowed as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    return LeadDetail.model_validate(lead)

@@ -1,11 +1,15 @@
 import uuid
 from datetime import datetime
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
+
+if TYPE_CHECKING:
+    from app.models.attorney import Attorney
 
 
 class LeadState(StrEnum):
@@ -57,3 +61,8 @@ class LeadStateEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     lead: Mapped[Lead] = relationship(back_populates="events")
+    actor: Mapped["Attorney"] = relationship()  # who made the change, shown in the history
+
+    @property
+    def actor_name(self) -> str:
+        return self.actor.name

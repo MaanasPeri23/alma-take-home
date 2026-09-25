@@ -83,8 +83,7 @@ def test_every_attorney_route_is_401_without_a_session(client, method, path):
 def test_signed_in_attorney_gets_past_auth_on_lead_routes(client, attorney):
     login(client)
 
-    # 501 until B4 builds the list; the point is that it's no longer 401.
-    assert client.get("/api/leads").status_code == 501
+    assert client.get("/api/leads").status_code == 200
 
 
 def forged_tokens(attorney_id: uuid.UUID) -> dict[str, str]:
