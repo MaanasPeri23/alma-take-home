@@ -57,6 +57,14 @@ make gen-client  # regenerate the frontend's API types from FastAPI's OpenAPI sp
 make down        # stop everything (docker compose down -v also wipes the data)
 ```
 
+The end-to-end test runs Playwright from your machine against the running stack, so it needs Node
+and a one-time install:
+
+```bash
+cd frontend && npm ci && npx playwright install chromium && cd ..
+make e2e         # submit → thank-you → login → download → mark reached out → both emails (~4 s)
+```
+
 ## How it's built, and the tradeoffs
 
 **The browser talks to one origin.** Next.js forwards every `/api/*` request to FastAPI, so the
