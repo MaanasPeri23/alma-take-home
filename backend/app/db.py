@@ -12,7 +12,9 @@ class Base(DeclarativeBase):
 
 # Sync engine on purpose: routes are plain `def`, so FastAPI runs them in its threadpool and the
 # blocking psycopg driver never stalls the event loop.
-engine = create_engine(get_settings().database_url, pool_pre_ping=True)
+# hide_parameters: a failed query's error message would otherwise include the prospect's name and
+# email, and that message ends up in the logs.
+engine = create_engine(get_settings().database_url, pool_pre_ping=True, hide_parameters=True)
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 

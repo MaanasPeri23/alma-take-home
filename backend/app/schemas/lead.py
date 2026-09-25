@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.lead import LeadState
 
@@ -33,7 +33,8 @@ class LeadOut(BaseModel):
 
 
 class LeadDetail(LeadOut):
-    history: list[StateEventOut]
+    # Read from Lead.events (oldest first); exposed to clients as "history".
+    history: list[StateEventOut] = Field(validation_alias="events")
 
 
 class LeadPage(BaseModel):
