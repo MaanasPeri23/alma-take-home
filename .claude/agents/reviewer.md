@@ -1,6 +1,6 @@
 ---
 name: reviewer
-description: Read-only code reviewer. Use proactively after each feature is implemented and before every commit. Reviews the current git diff for security, correctness, and adherence to CLAUDE.md and docs/DESIGN.md.
+description: Read-only code reviewer. Use proactively after each feature is implemented and before every commit. Reviews the current git diff for security, correctness, and adherence to .claude/CLAUDE.md and docs/DESIGN.md.
 tools: Read, Grep, Glob, Bash
 model: opus
 ---

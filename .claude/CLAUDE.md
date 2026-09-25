@@ -15,6 +15,7 @@ Lead state transitions go through the ALLOWED map in lead_service.py and always 
 ## Frontend
 lib/api/ is generated from FastAPI's OpenAPI (`make gen-client`). Never hand-edit it.
 Browser calls go to /api/* (proxied by Next.js rewrites). No CORS config.
+Next.js is version 16 and differs from older docs (e.g. middleware.ts is now proxy.ts). Check node_modules/next/dist/docs/ before writing Next.js code.
 
 ## Scope
 One plan item per request. No unrelated refactors. Do not build rate limiting, CAPTCHA,
@@ -35,7 +36,7 @@ Run only one Docker stack, from the backend folder.
 1. `make test` passes.
 2. Run the reviewer subagent on the diff and fix blockers.
 3. Print the manual check for this plan item (from docs/DESIGN.md) and wait for me to confirm it passed.
-4. If you or I found an agent mistake, append it to NOTES.md under "Agent catches".
+4. If you or I found an agent mistake, append it to docs/NOTES.md under "Agent catches".
 
 ## Commands
 make up | make test | make test-fast | make e2e | make lint | make seed | make gen-client

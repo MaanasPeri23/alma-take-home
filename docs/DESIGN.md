@@ -125,15 +125,13 @@ If the database insert fails after the upload, the service deletes the uploaded 
 
 ```
 alma-take-home/
-├── CLAUDE.md              # agent rules
-├── NOTES.md               # agent catches log + attribution
-├── README.md              # how to run
+├── README.md              # how to run, architecture, progress
 ├── docker-compose.yml     # web, api, db, minio, mailpit
 ├── Makefile               # make up / test / lint / seed / gen-client
 ├── .env.example
-├── .claude/               # settings.json (hooks), hooks/, agents/reviewer.md
+├── .claude/               # CLAUDE.md (agent rules), settings.json (hooks), hooks/, agents/reviewer.md
 ├── .github/workflows/     # CI + Claude PR review
-├── docs/                  # DESIGN.md, AGENT_USAGE.md, prompt-logs/
+├── docs/                  # DESIGN.md, NOTES.md, AGENT_USAGE.md, prompt-logs/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py, config.py, db.py
