@@ -145,6 +145,19 @@ Most of the code was written with Claude Code, under constraints I set up first:
 - **Every PR** gets CI (a required check on `main`) plus an automated Claude review.
 - **Nothing merges without me.**
 
+**Who caught what.** Eleven mistakes are logged in [docs/NOTES.md](docs/NOTES.md). I caught five
+directly:
+- an unannounced push
+- a cluttered repo root
+- no visible plan
+- a test plan that ignored client-supplied filenames
+- a CI setup that didn't actually block red PRs or model/migration drift
+
+The review loop I built caught the four code bugs (a download that would break mid-stream, a
+500 on a NUL character, security tests that couldn't fail, and a migration the tooling couldn't
+compare). Each one traces back to something I put in place: the per-commit reviewer, its
+checklist, the failure-case test rule, or the `alembic check` I asked for.
+
 Each commit ends with an `Agent:` trailer saying whether it was agent-written, hand-written, or
 mixed. [docs/NOTES.md](docs/NOTES.md) records each place the agent got something wrong and how it
 was caught. [docs/AGENT_USAGE.md](docs/AGENT_USAGE.md) is the short version.

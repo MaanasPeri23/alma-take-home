@@ -26,6 +26,17 @@ On GitHub: the Claude PR review action on every PR, and CI (`make up` + `make te
 
 ## How I kept it honest
 
+Most code bugs were caught by the reviewer, and that's the design working. I put a review step
+with my checklist on every commit, so problems surfaced before they could merge. I caught the
+process problems myself:
+- an unannounced push
+- a cluttered repo
+- no visible plan
+- a test plan that ignored client filenames
+- CI that didn't block red PRs
+
+All eleven catches, with what each traces back to, are in [NOTES.md](NOTES.md).
+
 - The hooks run whether or not the agent remembers.
 - The reviewer ran on every commit and found a real issue in almost every one.
 - CI runs on every PR, and `main` only accepts green PRs.
