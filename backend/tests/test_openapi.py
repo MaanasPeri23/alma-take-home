@@ -33,7 +33,12 @@ def test_lead_submission_is_multipart_with_a_file():
     assert "multipart/form-data" in body["content"]
 
 
-PUBLIC_ROUTES = {("post", "/api/leads"), ("post", "/api/auth/login"), ("get", "/health")}
+PUBLIC_ROUTES = {
+    ("post", "/api/leads"),
+    ("post", "/api/auth/login"),
+    ("post", "/api/auth/logout"),  # always clears the cookie; see routers/auth.py
+    ("get", "/health"),
+}
 
 
 def test_every_attorney_route_declares_401():

@@ -33,7 +33,14 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Logout */
+        /**
+         * Logout
+         * @description Always clears the session cookie, even if it's expired or invalid, and always returns 204.
+         *
+         *     The cookie is httpOnly, so the web app can't delete a stale one itself; without this, a dead
+         *     cookie could bounce an attorney between /login and the dashboard. Clearing a cookie grants
+         *     nothing, so it doesn't need a valid session.
+         */
         post: operations["logout"];
         delete?: never;
         options?: never;
@@ -381,15 +388,6 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Not signed in, or the session expired */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
         };
     };
     me: {
@@ -397,7 +395,9 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -419,6 +419,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     listLeads: {
@@ -430,7 +439,9 @@ export interface operations {
             };
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -503,7 +514,9 @@ export interface operations {
             path: {
                 lead_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -552,7 +565,9 @@ export interface operations {
             path: {
                 lead_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                session?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -614,7 +629,9 @@ export interface operations {
             path: {
                 lead_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                session?: string | null;
+            };
         };
         requestBody?: never;
         responses: {

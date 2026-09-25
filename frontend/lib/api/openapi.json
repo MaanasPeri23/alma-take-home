@@ -35,12 +35,14 @@
           "first_name": {
             "maxLength": 100,
             "minLength": 1,
+            "pattern": "^[^\\x00-\\x1f\\x7f]*[^\\s\\x00-\\x1f\\x7f][^\\x00-\\x1f\\x7f]*$",
             "title": "First Name",
             "type": "string"
           },
           "last_name": {
             "maxLength": 100,
             "minLength": 1,
+            "pattern": "^[^\\x00-\\x1f\\x7f]*[^\\s\\x00-\\x1f\\x7f][^\\x00-\\x1f\\x7f]*$",
             "title": "Last Name",
             "type": "string"
           },
@@ -426,20 +428,11 @@
     },
     "/api/auth/logout": {
       "post": {
+        "description": "Always clears the session cookie, even if it's expired or invalid, and always returns 204.\n\nThe cookie is httpOnly, so the web app can't delete a stale one itself; without this, a dead\ncookie could bounce an attorney between /login and the dashboard. Clearing a cookie grants\nnothing, so it doesn't need a valid session.",
         "operationId": "logout",
         "responses": {
           "204": {
             "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "Not signed in, or the session expired"
           }
         },
         "summary": "Logout",
@@ -451,6 +444,24 @@
     "/api/auth/me": {
       "get": {
         "operationId": "me",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Session"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -471,6 +482,16 @@
               }
             },
             "description": "Not signed in, or the session expired"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "Me",
@@ -521,6 +542,22 @@
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Session"
             }
           }
         ],
@@ -615,6 +652,22 @@
               "title": "Lead Id",
               "type": "string"
             }
+          },
+          {
+            "in": "cookie",
+            "name": "session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Session"
+            }
           }
         ],
         "responses": {
@@ -676,6 +729,22 @@
               "format": "uuid",
               "title": "Lead Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Session"
             }
           }
         ],
@@ -759,6 +828,22 @@
               "format": "uuid",
               "title": "Lead Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Session"
             }
           }
         ],

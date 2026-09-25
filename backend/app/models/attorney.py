@@ -13,6 +13,8 @@ class Attorney(Base):
     __tablename__ = "attorneys"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    # Stored lowercase (scripts/seed_attorneys.py is the only writer) and looked up with lower(),
+    # so the plain unique constraint is enough.
     email: Mapped[str] = mapped_column(String(320), unique=True)
     password_hash: Mapped[str] = mapped_column(String(100))
     name: Mapped[str] = mapped_column(String(200))
