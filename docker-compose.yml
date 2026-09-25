@@ -44,6 +44,8 @@ services:
 
   api:
     build: ./backend
+    # If startup fails (e.g. MinIO restarting), try again instead of sitting unhealthy.
+    restart: unless-stopped
     # Apply migrations before serving. Fine for local dev; production would run them as a deploy step.
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     env_file: .env

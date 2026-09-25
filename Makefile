@@ -1,4 +1,4 @@
-.PHONY: up down test test-fast lint migrate gen-client check-client
+.PHONY: up down test test-fast lint migrate gen-client check-client smoke
 
 UV := uv run --quiet --python 3.12 --extra dev
 
@@ -44,3 +44,7 @@ gen-client:
 # Fails if the committed client is out of date with the backend.
 check-client: gen-client
 	git diff --exit-code -- frontend/lib/api
+
+# Manual check for storage + email: one file into MinIO, one email into Mailpit.
+smoke:
+	docker compose exec -T api python -m scripts.smoke

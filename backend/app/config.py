@@ -24,6 +24,9 @@ class Settings(BaseSettings):
 
     jwt_secret: str
 
+    # Where the web app lives, for links in emails.
+    public_base_url: str = "http://localhost:3000"
+
 
 @lru_cache
 def get_settings() -> Settings:

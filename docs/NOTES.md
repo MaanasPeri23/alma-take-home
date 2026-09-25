@@ -44,3 +44,9 @@ Every commit also carries an `Agent:` trailer (`claude-code`, `mixed`, or `hand-
 - Why it was wrong: `postgresql_ops` is for operator classes, not sort order. The database got the right index, but the model and migration disagreed, so every future autogenerate would drop and recreate it. All tests still passed.
 - Caught by: reviewer subagent (ran `alembic check`)
 - Fix: `Index(..., Lead.created_at.desc(), Lead.id.desc())`, regenerated migration, and `alembic check` added to `make test` so CI catches model/migration drift.
+
+### Resume download would have failed mid-stream instead of returning 404
+- What the agent produced: `S3Storage.open` written as a generator, so `get_object` only ran when the first chunk was read.
+- Why it was wrong: in B4 the download route streams the file. A missing object would have raised *after* the 200 headers were sent, giving the attorney a broken download instead of a clean 404. The round-trip test passed because it iterated inside `pytest.raises`.
+- Caught by: reviewer subagent
+- Fix: `open` fetches eagerly and raises `ObjectNotFound` on the call itself; the test now asserts that without iterating. Same review added S3 timeouts, `restart: unless-stopped` on the api, and bucket creation only on a real 404.
