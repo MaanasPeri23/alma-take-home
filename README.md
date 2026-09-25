@@ -2,30 +2,68 @@
 
 Prospects submit their name, email, and resume through a public form. Both the prospect and an
 attorney get an email. Attorneys log in to a dashboard, review each lead, download the resume,
-and mark the lead as reached out.
+and mark the lead as reached out (or undo it).
 
 The stack was fixed by the assignment: FastAPI for the API and Next.js for the web app. I added
 Postgres for data, MinIO for resume files, and Mailpit to catch outgoing email locally.
 
+**More detail:**
+[docs/DESIGN.md](docs/DESIGN.md) (decisions, data model, API) ·
+[docs/AGENT_USAGE.md](docs/AGENT_USAGE.md) (how agents were used) ·
+[docs/NOTES.md](docs/NOTES.md) (attribution, and every agent mistake with how it was caught) ·
+[docs/prompt-logs/](docs/prompt-logs/)
+
 ## Running it
 
-You need Docker Desktop. Nothing else has to be installed to run the app.
+You need Docker Desktop, and `make` (preinstalled on macOS and most Linux distros). Nothing else
+has to be installed.
 
 ```bash
-make up      # build and start all five services; returns once every one is healthy
-make test    # lint, typecheck, and tests, all run inside the containers
-make down    # stop everything (add -v to docker compose down to wipe data)
+git clone https://github.com/MaanasPeri23/alma-take-home.git
+cd alma-take-home
+make up      # builds and starts all five services; returns once every one is healthy (first run: a few minutes)
+make seed    # creates the attorney login
 ```
+
+`make up` copies `.env.example` to `.env` the first time. Every value in it is a local default;
+there are no real credentials anywhere in this repo.
 
 | URL | What it is |
 | --- | --- |
-| http://localhost:3000 | The web app |
-| http://localhost:8000/docs | Interactive API docs (Swagger) |
+| http://localhost:3000 | Public lead form |
+| http://localhost:3000/dashboard | Attorney dashboard. Log in as `attorney@example.com` / `change-me-locally` |
 | http://localhost:8025 | Mailpit, where every email the app sends ends up |
-| http://localhost:9001 | MinIO console, where uploaded resumes are stored (`minioadmin` / `minioadmin`) |
+| http://localhost:8000/docs | Interactive API docs (Swagger) |
+| http://localhost:9001 | MinIO console, where resumes are stored (`minioadmin` / `minioadmin`) |
 
-`make up` copies `.env.example` to `.env` the first time it runs. Every value in there is a
-local default. There are no real credentials anywhere in this repo.
+### A two-minute tour
+
+1. Open http://localhost:3000 and submit the form with a PDF, DOC or DOCX resume.
+2. Open http://localhost:8025: there's a confirmation to the prospect and a "New lead" email to the
+   attorney.
+3. Try a fake file (any non-document renamed to `.pdf`): the form shows an error under the resume
+   field. The type is checked by the file's contents, not its name.
+4. Open http://localhost:3000/dashboard: you're sent to the login page. Log in.
+5. Open the lead, download the resume, and mark it reached out. The history shows who did it and
+   when. Undo moves it back to pending.
+
+### Other commands
+
+```bash
+make test        # everything CI runs: ruff, alembic check, pytest, eslint, tsc, client drift check
+make test-fast   # backend unit tests + frontend typecheck, no Docker needed (~5 s)
+make smoke       # puts one file in MinIO and sends one email to Mailpit
+make gen-client  # regenerate the frontend's API types from FastAPI's OpenAPI spec
+make down        # stop everything (docker compose down -v also wipes the data)
+```
+
+The end-to-end test runs Playwright from your machine against the running stack, so it needs Node
+and a one-time install:
+
+```bash
+cd frontend && npm ci && npx playwright install chromium && cd ..
+make e2e         # submit → thank-you → login → download → mark reached out → both emails (~4 s)
+```
 
 ## How it's built, and the tradeoffs
 
@@ -64,8 +102,9 @@ is never used as a path.
 
 **Lead state changes go through one table of allowed transitions.** `PENDING → REACHED_OUT` (and
 back, for undo) is defined in a single map in the service layer. Anything outside that map returns
-409. Every change also writes a row to `lead_state_events` recording who made it and when, which
-gives us history and undo from one mechanism. Adding a state like `REJECTED` later is a one-line
+409. Every change also writes a row to `lead_state_events` recording who made it and when, in the same
+transaction, and the lead row is locked while it changes, so two attorneys clicking at once can't
+both apply it. That one mechanism gives us history and undo. Adding a state like `REJECTED` later is a one-line
 change with no migration.
 
 **The API contract comes first.** The TypeScript client in `frontend/lib/api/` is generated from
@@ -81,64 +120,85 @@ and routing leads to different attorneys. All of these are covered in
 ```
 backend/     FastAPI app: routers (HTTP only) → services (logic) → storage / email / models
 frontend/    Next.js app: public form, login, attorney dashboard
-docs/        Design doc, notes on agent mistakes, how agents were used
+docs/        Design doc, agent usage write-up, notes on agent mistakes, prompt logs
 .claude/     Rules, hooks, and a reviewer agent for Claude Code (see below)
 .github/     CI and automated PR review
 ```
 
+## Tests
+
+94 backend tests, most of them against real Postgres, MinIO and Mailpit, in a separate
+`leads_test` database so they never touch demo data. They cover:
+- **Upload rejection:** a fake file type, a file over 5 MB, an empty file, a path-traversal
+  filename, and control characters in names.
+- **Failure handling:** an email failure still saves the lead; a database failure deletes the
+  stored file.
+- **Auth:** 401 on every internal route (the list is read from the API spec), and forged, expired
+  or unsigned tokens.
+- **Leads:** paging, 404s, and every state transition checked against the allowed map, including
+  its history row.
+
+`make test` also fails if a database model changed without a migration, or if the frontend's
+generated API types are out of date.
+
 ## How this was built
 
-Most of the code was written with Claude Code, under constraints I set up first. The rules live
-in `.claude/CLAUDE.md`. A hook lints every file the agent edits and runs the fast tests before it
-can say it's done. A separate read-only reviewer agent checks every diff before commit, and every
-PR gets CI plus an automated review. Nothing merges without me.
+Most of the code was written with Claude Code, under constraints I set up first:
+- **Rules** live in `.claude/CLAUDE.md`.
+- **Hooks** lint every file the agent edits and run the fast tests before it can say it's done.
+- **A read-only reviewer agent** checked every diff before commit, and found a real issue in
+  almost every one.
+- **The backend and frontend** were built in parallel in two git worktrees, against an API
+  contract merged first.
+- **Every PR** gets CI (a required check on `main`) plus an automated Claude review.
+- **Nothing merges without me.**
+
+**Who caught what.** Fifteen mistakes are logged in [docs/NOTES.md](docs/NOTES.md). I caught six
+directly:
+- an unannounced push
+- a cluttered repo root
+- no visible plan
+- a test plan that ignored client-supplied filenames
+- a CI setup that didn't actually block red PRs or model/migration drift
+- an unreadable upload button in dark mode
+
+The review loop I built caught the code bugs, including a download that would break mid-stream, a
+500 on a NUL character, security tests that couldn't fail, and a migration the tooling couldn't
+compare. Each one traces back to something I put in place: the per-commit reviewer, its
+checklist, the failure-case test rule, or the `alembic check` I asked for.
 
 Each commit ends with an `Agent:` trailer saying whether it was agent-written, hand-written, or
-mixed. [docs/NOTES.md](docs/NOTES.md) records the places the agent got something wrong and how
-each one was caught.
+mixed. [docs/NOTES.md](docs/NOTES.md) records each place the agent got something wrong and how it
+was caught. [docs/AGENT_USAGE.md](docs/AGENT_USAGE.md) is the short version.
 
 ## Progress
 
-Each step is one commit. The note after each step is the check I do by hand before committing it.
-
-**Foundation** (PR 1)
+**Foundation** (PRs #2, #3)
 - [x] F1: Agent rules, hooks, reviewer, design doc draft
-- [x] F2: Docker setup for all five services, Makefile, empty apps, the `/api` proxy, CI.
-  Check: the web app, `/api/health`, Mailpit, and MinIO all load
-- [x] F3: Database tables and migrations, API request/response shapes, route stubs, generated
-  client. Check: Swagger lists every route
+- [x] F2: Docker setup for all five services, Makefile, empty apps, the `/api` proxy, CI
+- [x] F3: Database tables and migrations, API contract, route stubs, generated client
 
-**Backend** (PR 2)
-- [x] B1: Storage and email interfaces. Check: a test email shows up in Mailpit and a test file in MinIO
-- [x] B2: Public lead submission. Check: a real PDF returns 201 with two emails; a renamed `.exe` returns 422
-- [x] B3: Attorney login and seed script. Check: listing leads without login returns 401
-- [x] B4: List, detail, resume download, state changes. Check: marking twice returns 409
+**Backend** (PR #4)
+- [x] B1: Storage and email interfaces
+- [x] B2: Public lead submission
+- [x] B3: Attorney login and seed script
+- [x] B4: List, detail, resume download, state changes (with undo)
 
-**Frontend** (PR 3, built in parallel with the backend)
-- [ ] W1: Public form and thank-you page. Check: validation errors show under the right field
-- [ ] W2: Login and redirect when signed out. Check: `/dashboard` sends you to `/login`
-- [ ] W3: Dashboard, lead detail, download, mark reached out. Check: the full flow in a browser
-- [ ] W4: Playwright end-to-end test. Check: watch it run once
+**Frontend** (PR #5, separate worktree, built in parallel)
+- [x] W1: Public form and thank-you page
+- [x] W2: Login and redirect when signed out
+- [x] W3: Dashboard, lead detail, download, mark reached out
+- [x] W4: Playwright end-to-end test
 
 **Wrap-up**
-- [ ] D1: Final README, design doc, agent usage write-up, prompt logs. Check: a fresh clone runs from this README alone
+- [x] D1: README, design doc, agent usage write-up, prompt logs
 - [ ] Loom walkthrough and submission
-
-If time runs short, I cut in this order: the undo button, list filters and pagination in the UI,
-then the Playwright test. The docs and the walkthrough stay.
 
 ## Notes
 
-Decisions and surprises along the way. Agent mistakes are logged separately in
-[docs/NOTES.md](docs/NOTES.md).
-
 - The PR review bot runs on my Claude subscription (`CLAUDE_CODE_OAUTH_TOKEN`), so the repo
   doesn't need an Anthropic API key.
-- `main` is protected: changes land through PRs only, and force pushes are blocked.
-- MinIO no longer publishes its image on Docker Hub, which is where Docker downloads images by
-  default, so `minio/minio` fails to pull. I use `cgr.dev/chainguard/minio` instead. It's the same
-  MinIO server, rebuilt and published by Chainguard. Everything still runs in Docker; only this
-  one image comes from a different registry.
-- Next.js 16 renamed `middleware.ts` to `proxy.ts`. The login redirect (W2) will use the new name.
-- API collection routes are declared without a trailing slash. FastAPI's automatic slash redirect
-  would otherwise point the browser at the internal `api:8000` host, which it can't reach.
+- `main` is protected: changes land through PRs only, CI must pass, and force pushes are blocked.
+- MinIO no longer publishes its image on Docker Hub, so `minio/minio` fails to pull. I use
+  `cgr.dev/chainguard/minio`, the same server rebuilt and published by Chainguard.
+- Next.js 16 renamed `middleware.ts` to `proxy.ts`; the login redirect uses the new name.

@@ -1,6 +1,9 @@
-# Leads App — Design
+# Leads App: Design
 
-> DRAFT: transcribed from the handoff by the agent. Rewrite the decisions in your own words before committing.
+How the app is built and why. The first half covers the decisions and their tradeoffs; the second
+half is the reference (data model, API, flows, testing). Where the build changed a decision from
+the original plan, the section [What changed during the build](#what-changed-during-the-build)
+says so and why.
 
 ## Problem and scope
 
@@ -20,11 +23,11 @@ Stack is fixed: FastAPI (API), Next.js (web), plus storage and an email service.
 | Resume storage | MinIO (S3-compatible) in docker-compose, behind a `StorageBackend` interface | Same API as S3, so production is a config change; files never touch the API container's disk |
 | Database | Postgres + SQLAlchemy 2.x + Alembic | Real migrations; the schema will evolve |
 | Email timing | Save the lead first, then send via FastAPI `BackgroundTasks` | A mail outage must never lose a lead; an outbox table is the production upgrade |
-| State changes | One allowed-transitions map in the service layer. `PENDING → REACHED_OUT`, plus undo (`REACHED_OUT → PENDING`) if time allows. Anything not in the map returns `409` | New states like `REJECTED` become a one-line change; spec only requires two states |
+| State changes | One allowed-transitions map in the service layer: `PENDING → REACHED_OUT`, plus undo (`REACHED_OUT → PENDING`). Anything not in the map returns `409`. The lead row is locked while it changes | New states like `REJECTED` become a one-line change; two attorneys clicking at once can't both apply the same change |
 | Audit | `lead_state_events` table: from, to, actor, timestamp, written on every transition | Undo, history, and "who marked this and when" from one mechanism |
 | Attorney recipient | One configured address (`ATTORNEY_EMAIL` env var) | Assignment says "an attorney"; routing is a documented next step |
 | Upload rules | PDF, DOC, DOCX only; 5 MB cap; type checked by file signature, not just extension; stored under a UUID key | Blocks spoofed files and path tricks; original filename kept only as metadata |
-| Resume access | Attorneys download through the API (streamed or short-lived presigned URL) | MinIO is never publicly exposed |
+| Resume access | Attorneys download through the API, streamed in 64 KB chunks with `nosniff` and `no-store` | MinIO is never publicly exposed, and every download passes the same auth check as the rest of the dashboard |
 | Public endpoint abuse | Documented, not built: rate limiting and a CAPTCHA | Worth naming; not worth 30 of 360 minutes |
 | API contract | OpenAPI is the source of truth; frontend uses a generated TypeScript client | Lets backend and frontend agents work in parallel safely |
 | Git and PRs | All work lands on `main` through PRs. Agents may branch, commit, push feature branches, open PRs, resolve conflicts. Agents never push to `main` and never merge | Every change gets a CI run and a bot review; the human keeps the final call |
@@ -85,7 +88,7 @@ UUID ids so lead URLs aren't guessable.
 | GET | `/api/auth/me` | Attorney | Current attorney, for the UI |
 | GET | `/api/leads?state=&limit=&offset=` | Attorney | Paginated list, newest first |
 | GET | `/api/leads/{id}` | Attorney | One lead, with its state history |
-| GET | `/api/leads/{id}/resume` | Attorney | Streams the file (or redirects to a short-lived presigned URL) |
+| GET | `/api/leads/{id}/resume` | Attorney | Streams the file with its original name; `404` if the lead or the file is missing |
 | PATCH | `/api/leads/{id}` | Attorney | `{"state": "REACHED_OUT"}` (or `PENDING` for undo); `409` if the transition isn't allowed |
 | GET | `/health` | Public | Liveness for compose healthchecks |
 
@@ -108,7 +111,7 @@ token stays valid until it expires).
 stateDiagram-v2
   [*] --> PENDING: prospect submits
   PENDING --> REACHED_OUT: attorney marks
-  REACHED_OUT --> PENDING: undo (if time)
+  REACHED_OUT --> PENDING: undo
   PENDING --> REJECTED: future, one-line add
 ```
 
@@ -160,13 +163,30 @@ alma-take-home/
 └── frontend/
     ├── app/               # page.tsx (form), thank-you/, login/, dashboard/
     ├── lib/api/           # generated TS client — never hand-edited
-    ├── middleware.ts      # redirect to /login if no session cookie
+    ├── proxy.ts           # Next.js 16 name for middleware: redirect to /login if no session cookie
     └── e2e/               # Playwright tests
 ```
+
+## What changed during the build
+
+The plan above was written before any code. These are the places the build changed it, and why.
+
+| Change | Why |
+| --- | --- |
+| MinIO image comes from `cgr.dev/chainguard/minio`, not `minio/minio` | MinIO stopped publishing to Docker Hub, so the planned image no longer pulls. Same server binary. |
+| `proxy.ts` instead of `middleware.ts` | Next.js 16 renamed the file. Same behavior. |
+| Logout is public and always clears the cookie | The cookie is httpOnly, so the web app can't delete a stale one. If logout required a valid session, an expired cookie could bounce an attorney between `/login` and the dashboard. Clearing a cookie grants nothing, so it doesn't need auth. |
+| Error responses are declared in the API contract from day one (401/404/409 as `{detail}`, 422 naming the field) | The frontend is generated from the spec and was built in parallel. Undeclared errors would have left it typing them wrong. |
+| Collection routes have no trailing slash | FastAPI's slash redirect would send the browser to the internal `api:8000` host through the Next.js proxy. |
+| `make test` also runs `alembic check` and a generated-client drift check | A reviewer found the dashboard index declared in a way Alembic couldn't compare. Both classes of drift now fail CI. |
+| Tests use a separate `leads_test` database | So running tests never wipes the data you demo with. |
+| `JWT_SECRET` must be at least 32 bytes; SQL errors hide their parameters | A short HS256 key is guessable, and a failed insert would otherwise have logged the prospect's name and email. |
+| CI (`test`) is a required check on `main` | Branch protection originally required only a PR, so a red PR could have been merged. |
 
 ## Commit plan
 
 Each commit: plan mode → approve → implement → `make test` + reviewer → manual check → commit.
+Status is tracked in the README.
 
 | # | Commit | Automated check | Manual check |
 | --- | --- | --- | --- |
@@ -180,13 +200,13 @@ Each commit: plan mode → approve → implement → `make test` + reviewer → 
 | B4 | feat(api): list, detail, resume download, state transitions | Tests: pagination bounds, 404, allowed transition, 409, event row written | Mark a lead → 200; again → 409; download opens the PDF |
 | — | PR 2 (backend) | CI + bot review | |
 | W1 | feat(web): public form, thank-you page | `tsc`, eslint | Submit form → thank-you; server errors show under the right field |
-| W2 | feat(web): login and auth middleware | `tsc`, eslint | `/dashboard` signed out → `/login`; log in → dashboard |
+| W2 | feat(web): login and auth redirect (`proxy.ts`) | `tsc`, eslint | `/dashboard` signed out → `/login`; log in → dashboard |
 | W3 | feat(web): dashboard, detail, download, mark reached out | `tsc`, eslint | Full flow in the browser; button changes after marking |
 | W4 | test(web): Playwright happy path | `make e2e` green | Watch it run once headed |
 | — | PR 3 (frontend) | CI + bot review | |
 | D1 | docs: README, DESIGN final, AGENT_USAGE, prompt logs | CI green | `docker compose down -v && make up`, then follow the README as a stranger would |
 
-If behind, cut in this order: undo transition, state filter and pagination UI, W4 Playwright. Never cut D1 or the Loom.
+If behind, cut in this order: state filter and pagination UI, W4 Playwright. (The undo shipped in B4.) Never cut D1 or the Loom.
 
 ## Testing
 
