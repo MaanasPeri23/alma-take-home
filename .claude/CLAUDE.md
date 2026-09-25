@@ -24,7 +24,8 @@ or an outbox worker — those are documented future work.
 ## Git rules
 - Never push to main. Never merge a PR (no `gh pr merge`, no merging into main). The human merges.
 - Work only on the feature branch you were given. Commit there, one commit per plan item.
-- You may push your feature branch, open a PR with `gh pr create`, and resolve merge conflicts on your branch.
+- Ask the human before every `git push`, naming the branch. Never push as part of another command.
+- You may push your feature branch (after asking), open a PR with `gh pr create`, and resolve merge conflicts on your branch.
 - Never force-push.
 - Conventional commit messages. Every commit ends with the trailer `Agent: claude-code`.
 
