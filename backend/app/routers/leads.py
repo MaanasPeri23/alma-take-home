@@ -19,8 +19,9 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_db
-from app.deps import get_email_sender, get_storage
+from app.deps import get_current_attorney, get_email_sender, get_storage
 from app.email.base import EmailSender
+from app.models.attorney import Attorney
 from app.models.lead import LeadState
 from app.schemas.errors import CONFLICT, NOT_FOUND, UNAUTHORIZED
 from app.schemas.lead import LeadDetail, LeadOut, LeadPage, LeadStateUpdate
@@ -33,6 +34,8 @@ from app.storage.base import StorageBackend
 router = APIRouter(prefix="/api/leads", tags=["leads"])
 
 NOT_IMPLEMENTED = HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "Not implemented yet")
+
+CurrentAttorney = Annotated[Attorney, Depends(get_current_attorney)]
 
 # Names end up in an email subject line and a Postgres text column: no control characters
 # (line breaks, NUL), and at least one visible character.
@@ -79,6 +82,7 @@ def create_lead(
 
 @router.get("", response_model=LeadPage, responses=UNAUTHORIZED, operation_id="listLeads")
 def list_leads(
+    _: CurrentAttorney,
     state: LeadState | None = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -93,7 +97,7 @@ def list_leads(
     responses={**UNAUTHORIZED, **NOT_FOUND},
     operation_id="getLead",
 )
-def get_lead(lead_id: uuid.UUID) -> LeadDetail:
+def get_lead(lead_id: uuid.UUID, _: CurrentAttorney) -> LeadDetail:
     raise NOT_IMPLEMENTED
 
 
@@ -107,7 +111,7 @@ def get_lead(lead_id: uuid.UUID) -> LeadDetail:
     },
     operation_id="downloadResume",
 )
-def download_resume(lead_id: uuid.UUID) -> StreamingResponse:
+def download_resume(lead_id: uuid.UUID, _: CurrentAttorney) -> StreamingResponse:
     raise NOT_IMPLEMENTED
 
 
@@ -117,6 +121,8 @@ def download_resume(lead_id: uuid.UUID) -> StreamingResponse:
     responses={**UNAUTHORIZED, **NOT_FOUND, **CONFLICT},
     operation_id="updateLeadState",
 )
-def update_lead_state(lead_id: uuid.UUID, body: LeadStateUpdate) -> LeadDetail:
+def update_lead_state(
+    lead_id: uuid.UUID, body: LeadStateUpdate, attorney: CurrentAttorney
+) -> LeadDetail:
     """Moves the lead to `body.state` if the transition is allowed, and records who did it."""
     raise NOT_IMPLEMENTED

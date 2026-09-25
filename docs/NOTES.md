@@ -56,3 +56,9 @@ Every commit also carries an `Agent:` trailer (`claude-code`, `mixed`, or `hand-
 - Why it was wrong: validation has to match what the database accepts. The reviewer caught it and suggested `^[^\x00-\x1f\x7f]*\S[^\x00-\x1f\x7f]*$`. That suggestion still let NUL through: the middle `\S` ("any non-space") matches NUL itself.
 - Caught by: reviewer subagent (the original bug), then a failing test (the reviewer's fix). I added a `nul-in-name` case before applying the suggested pattern, and it failed.
 - Fix: `[^\s\x00-\x1f\x7f]` for the required visible character. The same review turned on `hide_parameters=True` on the engine, because a failed insert's error message would otherwise log the prospect's name and email.
+
+### Security tests that would have passed with the security broken
+- What the agent produced: "bad signature" and "expired" token tests that signed tokens for a random UUID.
+- Why it was wrong: no attorney has that id, so the request got a 401 from the account lookup, whether or not the signature or expiry check worked. Removing either check would still have left the tests green. The same review found that a token without `exp` never expired, and that a password over 72 bytes crashed login with a 500 (bcrypt 5 raises).
+- Caught by: reviewer subagent
+- Fix: forged tokens are now built for a real attorney, and each test first proves the valid token works. Added other-secret, `alg: none` and no-`exp` cases, and made `exp`/`iat`/`sub` required. Checked by removing the `require` option: exactly the no-`exp` test failed. Passwords over 72 bytes are now a 401.

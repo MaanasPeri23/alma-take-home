@@ -81,7 +81,7 @@ UUID ids so lead URLs aren't guessable.
 | --- | --- | --- | --- |
 | POST | `/api/leads` | Public | Multipart form: fields + resume file; returns `201` |
 | POST | `/api/auth/login` | Public | Sets httpOnly JWT cookie |
-| POST | `/api/auth/logout` | Attorney | Clears cookie |
+| POST | `/api/auth/logout` | Public | Clears the cookie; always 204, even with a stale or invalid session |
 | GET | `/api/auth/me` | Attorney | Current attorney, for the UI |
 | GET | `/api/leads?state=&limit=&offset=` | Attorney | Paginated list, newest first |
 | GET | `/api/leads/{id}` | Attorney | One lead, with its state history |
@@ -93,6 +93,14 @@ UUID ids so lead URLs aren't guessable.
 resume file, uses FastAPI's validation shape (`detail: [{loc, msg, type}]`) with `loc` naming the
 field, so the form can show each error under the right input. The session cookie is named
 `session` (httpOnly); the web app's signed-out redirect only checks that it exists.
+
+**Sessions.** Login sets `session`: a JWT (HS256, 8 hours) in a cookie that is httpOnly (page
+scripts can't read it), SameSite=Lax (not sent on cross-site POST or PATCH), and Secure in
+production. Wrong email and wrong password get the same 401, and take the same time. Accounts
+come only from `make seed`. Logout always clears the cookie, even a stale one: it's httpOnly, so the
+web app can't delete it, and on any 401 the web app calls logout and goes to `/login`. CSRF: SameSite=Lax plus a JSON body on the one state-changing route
+covers it here; a CSRF token is future work, and so is server-side session revocation (a logged-out
+token stays valid until it expires).
 
 ## State machine
 

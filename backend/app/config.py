@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings
 
 
@@ -22,7 +23,15 @@ class Settings(BaseSettings):
     email_from: str = "leads@example.com"
     attorney_email: str = "attorney@example.com"
 
-    jwt_secret: str
+    # Signs session tokens. HS256 needs at least 32 bytes to be safe, so shorter keys fail startup.
+    jwt_secret: str = Field(min_length=32)
+    session_ttl_minutes: int = 8 * 60
+    # True in production (HTTPS only). False locally, where everything runs over plain http.
+    cookie_secure: bool = False
+
+    # Used only by scripts/seed_attorneys.py.
+    seed_attorney_email: str | None = None
+    seed_attorney_password: str | None = None
 
     # Where the web app lives, for links in emails.
     public_base_url: str = "http://localhost:3000"

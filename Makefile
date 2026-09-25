@@ -1,4 +1,4 @@
-.PHONY: up down test test-fast lint migrate gen-client check-client smoke
+.PHONY: up down test test-fast lint migrate gen-client check-client smoke seed
 
 UV := uv run --quiet --python 3.12 --extra dev
 
@@ -48,3 +48,7 @@ check-client: gen-client
 # Manual check for storage + email: one file into MinIO, one email into Mailpit.
 smoke:
 	docker compose exec -T api python -m scripts.smoke
+
+# Create (or reset) the attorney login from SEED_ATTORNEY_EMAIL / SEED_ATTORNEY_PASSWORD in .env.
+seed:
+	docker compose exec -T api python -m scripts.seed_attorneys
