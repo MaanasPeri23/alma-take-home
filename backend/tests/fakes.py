@@ -37,8 +37,9 @@ class SentEmail:
 class RecordingEmailSender:
     sent: list[SentEmail] = field(default_factory=list)
     fail: bool = False
+    fail_for: set[str] = field(default_factory=set)
 
     def send(self, to: str, subject: str, body: str) -> None:
-        if self.fail:
+        if self.fail or to in self.fail_for:
             raise ConnectionError("SMTP server unavailable")
         self.sent.append(SentEmail(to, subject, body))

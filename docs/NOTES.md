@@ -50,3 +50,9 @@ Every commit also carries an `Agent:` trailer (`claude-code`, `mixed`, or `hand-
 - Why it was wrong: in B4 the download route streams the file. A missing object would have raised *after* the 200 headers were sent, giving the attorney a broken download instead of a clean 404. The round-trip test passed because it iterated inside `pytest.raises`.
 - Caught by: reviewer subagent
 - Fix: `open` fetches eagerly and raises `ObjectNotFound` on the call itself; the test now asserts that without iterating. Same review added S3 timeouts, `restart: unless-stopped` on the api, and bucket creation only on a real 404.
+
+### A name with a hidden NUL character caused a 500, and the reviewer's fix was also wrong
+- What the agent produced: a name rule that only blocked line breaks (`[^\r\n]`), so `Ada\x00` passed validation. Postgres rejects NUL in text, so the prospect got a 500 instead of a 422 on the field.
+- Why it was wrong: validation has to match what the database accepts. The reviewer caught it and suggested `^[^\x00-\x1f\x7f]*\S[^\x00-\x1f\x7f]*$`. That suggestion still let NUL through: the middle `\S` ("any non-space") matches NUL itself.
+- Caught by: reviewer subagent (the original bug), then a failing test (the reviewer's fix). I added a `nul-in-name` case before applying the suggested pattern, and it failed.
+- Fix: `[^\s\x00-\x1f\x7f]` for the required visible character. The same review turned on `hide_parameters=True` on the engine, because a failed insert's error message would otherwise log the prospect's name and email.

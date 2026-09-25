@@ -230,6 +230,8 @@ the name is kept as a label for downloads and never used as a storage path.
 ## Future work
 
 - Rate limiting and a CAPTCHA on `POST /api/leads`.
+- A request body limit at the reverse proxy. The 5 MB resume cap is enforced by the API after
+  the multipart body has been received, so an oversized upload is rejected but still transferred.
 - Outbox table + worker for email (see production next steps above).
 - Attorney routing instead of a single `ATTORNEY_EMAIL`.
 - Additional states (`REJECTED`, `MOVED_ON`) — one line each in the enum and `ALLOWED` map.

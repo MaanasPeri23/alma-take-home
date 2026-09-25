@@ -110,7 +110,7 @@ Each step is one commit. The note after each step is the check I do by hand befo
 
 **Backend** (PR 2)
 - [x] B1: Storage and email interfaces. Check: a test email shows up in Mailpit and a test file in MinIO
-- [ ] B2: Public lead submission. Check: a real PDF returns 201 with two emails; a renamed `.exe` returns 422
+- [x] B2: Public lead submission. Check: a real PDF returns 201 with two emails; a renamed `.exe` returns 422
 - [ ] B3: Attorney login and seed script. Check: listing leads without login returns 401
 - [ ] B4: List, detail, resume download, state changes. Check: marking twice returns 409
 
