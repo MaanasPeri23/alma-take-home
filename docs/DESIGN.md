@@ -89,6 +89,11 @@ UUID ids so lead URLs aren't guessable.
 | PATCH | `/api/leads/{id}` | Attorney | `{"state": "REACHED_OUT"}` (or `PENDING` for undo); `409` if the transition isn't allowed |
 | GET | `/health` | Public | Liveness for compose healthchecks |
 
+**Errors.** 401, 404 and 409 return `{"detail": "<message>"}`. Every 422, including a rejected
+resume file, uses FastAPI's validation shape (`detail: [{loc, msg, type}]`) with `loc` naming the
+field, so the form can show each error under the right input. The session cookie is named
+`session` (httpOnly); the web app's signed-out redirect only checks that it exists.
+
 ## State machine
 
 ```mermaid
@@ -183,11 +188,44 @@ If behind, cut in this order: undo transition, state filter and pagination UI, W
 | Fast tests | Every time the agent stops | Stop hook: `make test-fast` (unit tests + `tsc --noEmit`) |
 | Full tests + review | Before each commit | `make test`, then the reviewer subagent on the diff |
 | Manual check | Before each commit | The "Manual check" column above |
-| CI | Every push to a PR | `ci.yml`: full suite in Docker |
+| CI | Every push to a PR | `ci.yml`: `make up` + `make test` on a clean runner (includes `alembic check` and the generated-client drift check) |
 | Bot review | Every push to a PR | `claude-code-review.yml` |
 | Full E2E | Before merging PR 3 and before the Loom | `make e2e`, then the whole flow by hand from a clean stack |
 
-The backend suite must cover: field validation, fake file type, size cap, email failure not failing the submit, upload cleanup when the DB insert fails, 401 on every internal route, pagination bounds, 404s, allowed transitions, 409 on disallowed ones, and an event row per transition.
+The backend suite must cover: field validation, fake file type, size cap, email failure not failing the submit, upload cleanup when the DB insert fails, a client-supplied filename with path segments (`../../etc/passwd`) stored as a bare name and never used as a storage path, 401 on every internal route, pagination bounds, 404s, allowed transitions, 409 on disallowed ones, and an event row per transition.
+
+### Manual test recipes
+
+Run these against `make up`. Swagger at http://localhost:8000/docs works for everything except
+cookies; use curl or the browser for anything behind login.
+
+**Uploading a file with curl.** Swagger's "copy as curl" only knows the file's *name*, because
+browsers never reveal where a file lives on disk. Pasted as-is, curl looks for that name in the
+current folder and fails with `curl: (26) Failed to open/read local data`. That error is local to
+curl; the request never reaches the API. Use the full path (drag the file into the terminal), and
+leave out `-H 'Content-Type: multipart/form-data'`, since `-F` sets it with the right boundary:
+
+```bash
+curl -i -X POST http://localhost:8000/api/leads \
+  -F first_name=Ada -F last_name=Lovelace -F email=ada@example.com \
+  -F 'resume=@/full/path/to/resume.pdf;type=application/pdf'
+```
+
+The server only ever receives the file's contents and its bare name. That's the behavior we want:
+the name is kept as a label for downloads and never used as a storage path.
+
+| After | Request | Expect |
+| --- | --- | --- |
+| F3 | `POST /api/leads` (above), `GET /api/leads` | `501 Not Implemented`: the routes exist, but have no logic yet |
+| B2 | `POST /api/leads` with a real PDF | `201`, and two emails in Mailpit |
+| B2 | Same, with an `.exe` renamed to `.pdf` | `422` with `loc: ["body", "resume"]` |
+| B2 | Same, with a file over 5 MB | `422` on `resume` |
+| B2 | Same, with a missing field or a bad email | `422` naming that field |
+| B3 | `GET /api/leads` without logging in | `401` |
+| B3 | `POST /api/auth/login` with curl `-c cookies.txt`, then `GET /api/leads -b cookies.txt` | `200` with a page of leads |
+| B4 | `PATCH /api/leads/{id}` with `{"state":"REACHED_OUT"}`, twice | `200`, then `409` |
+| B4 | `GET /api/leads/{id}/resume` | The original PDF downloads |
+| B4 | `GET /api/leads/<random uuid>` | `404` |
 
 ## Future work
 
